@@ -19,25 +19,43 @@ data = pd.read_csv('strum_etas.csv', nrows = 395)
 subjects_counts = data.Subject.value_counts()
 subjects = subjects_counts.keys()
 
-data_single = data[data.Subject != subjects[0]]
-data_test = data[data.Subject == subjects[0]]
+my_subject = subjects[0]
 
-y = data_single['Label'].values
-X = data_single.ix[:,2:].values
+class strum_second_layer:
 
-y_test = data_test['Label'].values
-X_test = data_test.ix[:,2:].values
+	def __init__(self, my_subject, modality):
+		global data
+		self.subject = my_subject
+		data_train =  data[data.Subject != self.subject ]   
+		data_test =  data[data.Subject == self.subject ]     
 
-kf_total = cross_validation.KFold(len(X), n_folds=10, indices=True, shuffle=True, random_state=4)
-log_elastic_net = linear_model.SGDClassifier(loss='log')
-l1_range = np.linspace(0, 1, 20)
-alpha_range = [0.0001 , 0.001, 0.01, 0.1, 1]
-lrgs = grid_search.GridSearchCV(estimator=log_elastic_net, param_grid=dict( alpha = alpha_range,
-                                                                           l1_ratio = l1_range), n_jobs=1)
+		self.y = data_train['Label'].values
+		self.X = data_train.ix[:,2:].values
 
-acc_per_fold = [lrgs.fit(X[train],y[train]).score(X[test],y[test]) for train, test in kf_total]
+		self.y_test = data_test['Label'].values
+		self.X_test = data_test.ix[:,2:].values  
 
-print 'Average error across folds: ', np.mean(acc_per_fold)
-print 'Best parameters of elastic net: ', lrgs.best_params_   
+	def fit(self):
 
-print 'Prediction accuracy is ', lrgs.score(X_test,y_test)                                                                     
+		kf_total = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
+		log_elastic_net = linear_model.SGDClassifier(loss='log')
+		l1_range = np.linspace(0, 1, 20)
+		alpha_range = [0.0001 , 0.001, 0.01, 0.1, 1]
+		self.lrgs = grid_search.GridSearchCV(estimator=log_elastic_net, param_grid=dict( alpha = alpha_range,
+		                                                                           l1_ratio = l1_range), n_jobs=1)
+
+		acc_per_fold = [self.lrgs.fit(self.X[train],self.y[train]).score(self.X[test],self.y[test]) 
+																			for train, test in kf_total]
+		self.best_params = self.lrgs.best_params_  																	
+		self.acc_mean = np.mean(acc_per_fold)
+		print 'Average error across folds: ', self.acc_mean
+
+	def predict(self):
+
+		prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
+		print 'Prediction accuracy is ', prediction_accuracy
+
+
+deneme = strum_second_layer(my_subject)
+
+#data[filter((lambda x: x.startswith('EEG')), c)].values
