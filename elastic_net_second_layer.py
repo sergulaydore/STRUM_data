@@ -23,17 +23,23 @@ my_subject = subjects[0]
 
 class strum_second_layer:
 
-	def __init__(self, my_subject, modality):
+	def __init__(self, my_subject, modalities):
 		global data
 		self.subject = my_subject
 		data_train =  data[data.Subject != self.subject ]   
-		data_test =  data[data.Subject == self.subject ]     
+		data_test =  data[data.Subject == self.subject ] 
+
+		possible_modalities = ['EEG-Stim','EEG-Cue','Pupil','HR','RT']
+		modality_index = []
+		for modality in modalities:
+			if modality in possible_modalities:
+				modality_index.extend(filter((lambda x: x.startswith(modality)), data.columns))    
 
 		self.y = data_train['Label'].values
-		self.X = data_train.ix[:,2:].values
+		self.X = data_train[modality_index].values
 
 		self.y_test = data_test['Label'].values
-		self.X_test = data_test.ix[:,2:].values  
+		self.X_test = data_test[modality_index].values  
 
 	def fit(self):
 
@@ -56,6 +62,7 @@ class strum_second_layer:
 		print 'Prediction accuracy is ', prediction_accuracy
 
 
-deneme = strum_second_layer(my_subject)
+deneme = strum_second_layer(my_subject, ['HR', 'EEG-Cue'])
+deneme.fit()
+deneme.predict()
 
-#data[filter((lambda x: x.startswith('EEG')), c)].values
