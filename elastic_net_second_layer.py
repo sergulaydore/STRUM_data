@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 from sklearn import datasets, linear_model, cross_validation, grid_search
+from sklearn.metrics import roc_auc_score
 
 data = pd.read_csv('strum_etas.csv', nrows = 395)
 
@@ -58,11 +59,17 @@ class strum_second_layer:
 
 	def predict(self):
 
-		prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
-		print 'Prediction accuracy is ', prediction_accuracy
+		self.prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
+		print 'Prediction accuracy is ', self.prediction_accuracy
+
+		y_predict = self.lrgs.predict(self.X_test)
+		self.auc = roc_auc_score(self.y_test, y_predict)
+		print 'Area under ROC is: ', self.auc
 
 
-deneme = strum_second_layer(my_subject, ['HR', 'EEG-Cue'])
+
+
+deneme = strum_second_layer(my_subject, ['EEG-Cue','EEG-Stim','Pupil','HR','RT'])
 deneme.fit()
 deneme.predict()
 
