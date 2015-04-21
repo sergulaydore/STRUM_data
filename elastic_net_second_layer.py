@@ -2,10 +2,10 @@
 import pandas as pd
 import numpy as np
 from sklearn import datasets, linear_model, cross_validation, grid_search
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score
 
 data = pd.read_csv('strum_etas.csv', nrows = 395)
-
+data = data.reindex(np.random.permutation(data.index))
 # data.columns
 # Out[3]: Index([u'Subject', u'Label', u'EEG-Stim', u'EEG-Stim.1', u'EEG-Stim.2', u'EEG-Stim.3', u'EEG-Stim.4', u'EEG-Stim.5',
 #  u'EEG-Stim.6', u'EEG-Stim.7', u'EEG-Stim.8', u'EEG-Stim.9', u'EEG-Stim.10', u'EEG-Stim.11', u'EEG-Stim.12', u'EEG-Stim.13', 
@@ -20,15 +20,14 @@ data = pd.read_csv('strum_etas.csv', nrows = 395)
 subjects_counts = data.Subject.value_counts()
 subjects = subjects_counts.keys()
 
-my_subject = subjects[0]
-
 class strum_second_layer:
 
 	def __init__(self, my_subject, modalities):
 		global data
-		self.subject = my_subject
-		data_train =  data[data.Subject != self.subject ]   
-		data_test =  data[data.Subject == self.subject ] 
+		self.subject = my_subject 
+		data_single =  data[data.Subject == self.subject ] 
+
+		data_single = data_single.reindex(np.random.permutation(data_single.index))
 
 		possible_modalities = ['EEG-Stim','EEG-Cue','Pupil','HR','RT']
 		modality_index = []
@@ -36,15 +35,12 @@ class strum_second_layer:
 			if modality in possible_modalities:
 				modality_index.extend(filter((lambda x: x.startswith(modality)), data.columns))    
 
-		self.y = data_train['Label'].values
-		self.X = data_train[modality_index].values
-
-		self.y_test = data_test['Label'].values
-		self.X_test = data_test[modality_index].values  
+		self.y = data_single['Label'].values
+		self.X = data_single[modality_index].values
 
 	def fit(self):
 
-		kf_total = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
+		self.kf_total = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
 		log_elastic_net = linear_model.SGDClassifier(loss='log')
 		l1_range = np.linspace(0, 1, 20)
 		alpha_range = [0.0001 , 0.001, 0.01, 0.1, 1]
@@ -52,24 +48,33 @@ class strum_second_layer:
 		                                                                           l1_ratio = l1_range), n_jobs=1)
 
 		acc_per_fold = [self.lrgs.fit(self.X[train],self.y[train]).score(self.X[test],self.y[test]) 
-																			for train, test in kf_total]
-		self.best_params = self.lrgs.best_params_  																	
-		self.acc_mean = np.mean(acc_per_fold)
-		print 'Average error across folds: ', self.acc_mean
+		 																	for train, test in self.kf_total]
 
 	def predict(self):
 
-		self.prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
-		print 'Prediction accuracy is ', self.prediction_accuracy
+		self.predictions = []
 
-		y_predict = self.lrgs.predict(self.X_test)
-		self.auc = roc_auc_score(self.y_test, y_predict)
+		for train, test in self.kf_total:
+			self.lrgs.fit(self.X[train],self.y[train])
+			self.predictions.extend(self.lrgs.predict(self.X[test]))
+
+		self.auc = roc_auc_score(self.y, np.array(self.predictions))
 		print 'Area under ROC is: ', self.auc
+		self.acc = accuracy_score(self.y, np.array(self.predictions))
+		print 'Accuracy score is: ', self.acc
+		# self.prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
+		# print 'Prediction accuracy is ', self.prediction_accuracy
+
+		# y_predict = self.lrgs.predict(self.X_test)
+		# self.auc = roc_auc_score(self.y_test, y_predict)
+		# print 'Area under ROC is: ', self.auc
 
 
 
+for i in range(5):
+	my_subject = subjects[i]
 
-deneme = strum_second_layer(my_subject, ['EEG-Cue','EEG-Stim','Pupil','HR','RT'])
-deneme.fit()
-deneme.predict()
+	deneme = strum_second_layer(my_subject, ['EEG-Stim', 'EEG-Cue','Pupil'])
+	deneme.fit()
+	deneme.predict()
 
