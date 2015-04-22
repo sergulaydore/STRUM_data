@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn import datasets, linear_model, cross_validation, grid_search
 from sklearn.metrics import roc_auc_score, accuracy_score
+from matplotlib import pyplot as plt
 
 data = pd.read_csv('strum_etas.csv', nrows = 395)
 #data = data.reindex(np.random.permutation(data.index))
@@ -39,17 +40,33 @@ class strum_second_layer:
 	def fit(self):
 
 		n_iter = 100 # the number of iterations should be more than that ... 
-		c_range = np.logspace(-3, 3, 100)
-		cv = cross_validation.ShuffleSplit(len(self.X), n_iter=n_iter, test_size=0.4)
-		self.train_scores = np.zeros((len(c_range), n_iter))
-		self.test_scores = np.zeros((len(c_range), n_iter))
+		c_range = np.logspace(-4, 4, 200)
+		
+		self.train_scores = np.zeros((10,len(c_range), n_iter))
+		self.test_scores = np.zeros((10,len(c_range), n_iter))
+		self.best_c_vec = np.zeros((10))
 
-		for idx_c, c in enumerate(c_range):
-			for idx_cv, (train, test) in enumerate(cv):
-				logist = linear_model.LogisticRegression(C = c, penalty = 'l1')
-				logist.fit(self.X[train], self.y[train])
-				self.train_scores[idx_c, idx_cv] = logist.score(self.X[train], self.y[train])
-				self.test_scores[idx_c, idx_cv] = logist.score(self.X[test], self.y[test])
+		cv1 = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
+		self.predictions = []
+		for idx_cv_1, (train1, test1) in enumerate(cv1):
+			print 'Test set: ', idx_cv_1
+			X_test = self.X[test1]
+			y_test = self.X[test1]
+			X_train = self.X[train1]
+			y_train = self.y[train1]
+
+			cv2 = cross_validation.ShuffleSplit(len(X_train), n_iter=n_iter, test_size=0.3)
+			for idx_c, c in enumerate(c_range):
+				for idx_cv_2, (train2, test2) in enumerate(cv2):
+					logist = linear_model.LogisticRegression(C = c, penalty = 'l2')
+					logist.fit(X_train[train2], y_train[train2])
+					self.train_scores[idx_cv_1, idx_c, idx_cv_2] = logist.score(X_train[train2], y_train[train2])
+					self.test_scores[idx_cv_1, idx_c, idx_cv_2] = logist.score(X_train[test2], y_train[test2])
+
+			self.best_c_vec[idx_cv_1] = c_range[np.argmax(deneme.test_scores[idx_cv_1,:,:].mean(1))]
+			logist = linear_model.LogisticRegression(C = self.best_c_vec[idx_cv_1], penalty = 'l2')
+			logist.fit(X_train, y_train)
+			self.predictions.extend(logist.predict(X_test))
 
 
 		# self.kf_total = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
@@ -65,18 +82,12 @@ class strum_second_layer:
 		# acc_per_fold = [self.lrgs.fit(self.X[train],self.y[train]).score(self.X[test],self.y[test]) 
 		#  																	for train, test in self.kf_total]
 
-	def predict(self):
-
-		self.predictions = []
-
-		for train, test in self.kf_total:
-			# self.lrgs.fit(self.X[train],self.y[train])
-			self.predictions.extend(self.lrgs.predict(self.X[test]))
+	def score(self):
 
 		self.auc = roc_auc_score(self.y, np.array(self.predictions))
-		print 'Area under ROC is: ', self.auc
+		print 'Area under ROC is: ', self.auc, 'for subject', self.my_subject
 		self.acc = accuracy_score(self.y, np.array(self.predictions))
-		print 'Accuracy score is: ', self.acc
+		print 'Accuracy score is: ', self.acc, 'for subject', self.my_subject
 		# self.prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
 		# print 'Prediction accuracy is ', self.prediction_accuracy
 
@@ -84,35 +95,35 @@ class strum_second_layer:
 		# self.auc = roc_auc_score(self.y_test, y_predict)
 		# print 'Area under ROC is: ', self.auc
 
-
-i=0
-my_subject = subjects[i]
+my_subject = subjects[0]
 
 deneme = strum_second_layer(my_subject, ['EEG-Stim', 'EEG-Cue','Pupil'])
 deneme.fit()
+deneme.score()
 
-from matplotlib import pyplot as plt
-f, ax = plt.subplots(figsize=(12,8))
-c_range = np.logspace(-3, 3, 100)
-#for i in range(n_iter):
-#    ax.semilogx(gammas, train_scores[:, i], alpha=0.2, lw=2, c='b')
-#    ax.semilogx(gammas, test_scores[:, i], alpha=0.2, lw=2, c='g')
-ax.semilogx(c_range, deneme.test_scores.mean(1), lw=4, c='g', label='test score')
-ax.semilogx(c_range, deneme.train_scores.mean(1), lw=4, c='b', label='train score')
+# for idx_cv_1 in range(10):
+
+# 	f, ax = plt.subplots(figsize=(12,8))
+# 	c_range = np.logspace(-4, 4, 200)
+# 	ax.semilogx(c_range, deneme.test_scores[idx_cv_1,:,:].mean(1), lw=4, c='g', label='test score')
+# 	ax.semilogx(c_range, deneme.train_scores[idx_cv_1,:,:].mean(1), lw=4, c='b', label='train score')
 
 
-ax.fill_between(c_range, deneme.train_scores.min(1), deneme.train_scores.max(1), color = 'b', alpha=0.2)
-ax.fill_between(c_range, deneme.test_scores.min(1), deneme.test_scores.max(1), color = 'g', alpha=0.2)
+# 	ax.fill_between(c_range, deneme.train_scores[idx_cv_1,:,:].min(1), deneme.train_scores[idx_cv_1,:,:].max(1), color = 'b', alpha=0.2)
+# 	ax.fill_between(c_range, deneme.test_scores[idx_cv_1,:,:].min(1), deneme.test_scores[idx_cv_1,:,:].max(1), color = 'g', alpha=0.2)
 
-ax.set_ylabel("score for LR",fontsize=16)
-ax.set_xlabel("C",fontsize=16)
-best_c = c_range[np.argmax(deneme.test_scores.mean(1))]
-best_score = deneme.test_scores.mean(1).max()
-ax.text(best_c, best_score+0.05, "C = %6.4f | score=%6.4f" % (best_c, best_score),\
-        fontsize=15, bbox=dict(facecolor='w',alpha=0.5))
-[x.set_fontsize(16) for x in ax.xaxis.get_ticklabels()]
-[x.set_fontsize(16) for x in ax.yaxis.get_ticklabels()]
-ax.legend(fontsize=16,  loc=0)
-ax.set_ylim(0, 1.1)
-plt.show()
+# 	ax.set_ylabel("score for LR",fontsize=16)
+# 	ax.set_xlabel("C",fontsize=16)
+# 	best_c = c_range[np.argmax(deneme.test_scores[idx_cv_1,:,:].mean(1))]
+# 	best_score = deneme.test_scores[idx_cv_1,:,:].mean(1).max()
+# 	ax.text(best_c, best_score+0.05, "C = %6.4f | score=%6.4f" % (best_c, best_score),\
+# 	        fontsize=15, bbox=dict(facecolor='w',alpha=0.5))
+# 	[x.set_fontsize(16) for x in ax.xaxis.get_ticklabels()]
+# 	[x.set_fontsize(16) for x in ax.yaxis.get_ticklabels()]
+# 	ax.legend(fontsize=16,  loc=0)
+# 	ax.set_ylim(0, 1.1)
+# 	ax.set_title('Fold ' + str(idx_cv_1))
+# 	plt.show()
+
+#pylab.title('Minimal Energy Configuration of %s Charges on Disc W = %s'%(N, W))
 
