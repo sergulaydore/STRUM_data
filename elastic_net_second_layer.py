@@ -40,22 +40,24 @@ class strum_second_layer:
 	def fit(self):
 
 		n_iter = 100 # the number of iterations should be more than that ... 
-		c_range = np.logspace(-4, 4, 200)
-		
+		c_range = np.logspace(-4, 4, 10)
 		self.train_scores = np.zeros((10,len(c_range), n_iter))
 		self.test_scores = np.zeros((10,len(c_range), n_iter))
 		self.best_c_vec = np.zeros((10))
 
 		cv1 = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
+		#cv1 = cross_validation.ShuffleSplit(len(self.X), n_iter=10, test_size=0.1)
 		self.predictions = []
+		self.ytest = []
 		for idx_cv_1, (train1, test1) in enumerate(cv1):
-			print 'Test set: ', idx_cv_1
+			# print test1
+			# print 'Test set: ', idx_cv_1
 			X_test = self.X[test1]
-			y_test = self.X[test1]
+			y_test = self.y[test1]
 			X_train = self.X[train1]
 			y_train = self.y[train1]
 
-			cv2 = cross_validation.ShuffleSplit(len(X_train), n_iter=n_iter, test_size=0.3)
+			cv2 = cross_validation.ShuffleSplit(len(X_train), n_iter=n_iter, test_size=0.1)
 			for idx_c, c in enumerate(c_range):
 				for idx_cv_2, (train2, test2) in enumerate(cv2):
 					logist = linear_model.LogisticRegression(C = c, penalty = 'l2')
@@ -67,7 +69,7 @@ class strum_second_layer:
 			logist = linear_model.LogisticRegression(C = self.best_c_vec[idx_cv_1], penalty = 'l2')
 			logist.fit(X_train, y_train)
 			self.predictions.extend(logist.predict(X_test))
-
+			self.ytest.extend(y_test)
 
 		# self.kf_total = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
 		# logist = linear_model.LogisticRegression()
@@ -84,10 +86,10 @@ class strum_second_layer:
 
 	def score(self):
 
-		self.auc = roc_auc_score(self.y, np.array(self.predictions))
-		print 'Area under ROC is: ', self.auc, 'for subject', self.my_subject
-		self.acc = accuracy_score(self.y, np.array(self.predictions))
-		print 'Accuracy score is: ', self.acc, 'for subject', self.my_subject
+		self.auc = roc_auc_score(self.ytest, np.array(self.predictions))
+		print 'Area under ROC is: ', self.auc, 'for subject', self.subject
+		self.acc = accuracy_score(self.ytest, np.array(self.predictions))
+		print 'Accuracy score is: ', self.acc, 'for subject', self.subject
 		# self.prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
 		# print 'Prediction accuracy is ', self.prediction_accuracy
 
@@ -95,12 +97,61 @@ class strum_second_layer:
 		# self.auc = roc_auc_score(self.y_test, y_predict)
 		# print 'Area under ROC is: ', self.auc
 
-my_subject = subjects[0]
 
-deneme = strum_second_layer(my_subject, ['EEG-Stim', 'EEG-Cue','Pupil'])
-deneme.fit()
-deneme.score()
+modality_list = ['EEG-Stim,EEG-Cue,Pupil', 
+				'EEG-Stim,EEG-Cue,Pupil,RT',
+				'EEG-Stim,EEG-Cue,Pupil,HR',
+				'EEG-Stim,EEG-Cue', 
+				'Pupil', 
+				'EEG-Stim',
+				'EEG-Cue',
+				'HR',
+				'RT']
+# modality_list = ['EEG-Stim,EEG-Cue,Pupil'], 
+# 				['EEG-Stim,EEG-Cue,Pupil,RT'], 
+# 				['EEG-Stim,EEG-Cue,Pupil,HR'],
+# 				['EEG-Stim,EEG-Cue'],
+# 				['Pupil'], 
+# 				['EEG-Stim'], 
+# 				['EEG-Cue'], 
+# 				['HR'], 
+# 				['RT'] ]
+for modalities in modality_list:
+	single_results = dict()
+	single_results['modalities'] = modalities
+	auc = []; acc = []
+	for idx in range(len(subjects)):
+		my_subject = subjects[idx]
 
+		deneme = strum_second_layer(my_subject, modalities.split(','))
+		deneme.fit()
+		deneme.score()
+		auc.append(deneme.auc)
+		acc.append(deneme.acc)
+
+	single_results['acc'] = acc
+	single_results['auc'] = auc
+	my_df = pd.DataFrame(single_results)
+	try:
+		all_results = pd.concat([all_results, my_df])
+	except:
+		all_results = my_df
+
+all_results.to_csv('all_results.csv')
+sns.set_style("whitegrid")
+sns.barplot(x="modalities", y="auc", data=all_results)
+
+# import pickle
+# output = open('all_results.pkl', 'wb')
+
+# # Pickle dictionary using protocol 0.
+# pickle.dump(all_results, output)
+# output.close()
+
+# import pandas as pd
+# my_df = pd.DataFrame(single_results['results']['auc'], columns = ['AUC'])
+# my_df['acc'] = single_results['results']['acc']
+# my_df['modalities'] = 'EEG-Stim,EEG-Cue,Pupil'
 # for idx_cv_1 in range(10):
 
 # 	f, ax = plt.subplots(figsize=(12,8))
