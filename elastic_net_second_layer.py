@@ -49,6 +49,7 @@ class strum_second_layer:
 		#cv1 = cross_validation.ShuffleSplit(len(self.X), n_iter=10, test_size=0.1)
 		self.predictions = []
 		self.ytest = []
+		self.probabilities = []
 		for idx_cv_1, (train1, test1) in enumerate(cv1):
 			# print test1
 			# print 'Test set: ', idx_cv_1
@@ -57,19 +58,27 @@ class strum_second_layer:
 			X_train = self.X[train1]
 			y_train = self.y[train1]
 
-			cv2 = cross_validation.ShuffleSplit(len(X_train), n_iter=n_iter, test_size=0.1)
+			cv2 = cross_validation.ShuffleSplit(len(X_train), n_iter=n_iter, test_size=0.3)
 			for idx_c, c in enumerate(c_range):
 				for idx_cv_2, (train2, test2) in enumerate(cv2):
 					logist = linear_model.LogisticRegression(C = c, penalty = 'l2')
-					logist.fit(X_train[train2], y_train[train2])
-					self.train_scores[idx_cv_1, idx_c, idx_cv_2] = logist.score(X_train[train2], y_train[train2])
-					self.test_scores[idx_cv_1, idx_c, idx_cv_2] = logist.score(X_train[test2], y_train[test2])
+					if 1 in y_train[test2] and 0 in y_train[test2] and 1 in y_train[train2] and 0 in y_train[train2]:
+						logist.fit(X_train[train2], y_train[train2])
+					# self.train_scores[idx_cv_1, idx_c, idx_cv_2] = logist.score(X_train[train2], y_train[train2])
+					# self.test_scores[idx_cv_1, idx_c, idx_cv_2] = logist.score(X_train[test2], y_train[test2])
+					# print y_train[test2]
+					# self.train_scores[idx_cv_1, idx_c, idx_cv_2] = roc_auc_score(y_train[train2], 
+					# 																logist.predict(X_train[train2]))
+					
+						self.test_scores[idx_cv_1, idx_c, idx_cv_2] = roc_auc_score(y_train[test2], 
+																						logist.predict(X_train[test2]) )
 
-			self.best_c_vec[idx_cv_1] = c_range[np.argmax(deneme.test_scores[idx_cv_1,:,:].mean(1))]
+			self.best_c_vec[idx_cv_1] = c_range[np.argmax(self.test_scores[idx_cv_1,:,:].mean(1))]
 			logist = linear_model.LogisticRegression(C = self.best_c_vec[idx_cv_1], penalty = 'l2')
 			logist.fit(X_train, y_train)
 			self.predictions.extend(logist.predict(X_test))
 			self.ytest.extend(y_test)
+			self.probabilities.extend(logist.predict_proba(X_test)[:,1])
 
 		# self.kf_total = cross_validation.KFold(len(self.X), n_folds=10, indices=True, shuffle=True, random_state=4)
 		# logist = linear_model.LogisticRegression()
@@ -90,6 +99,8 @@ class strum_second_layer:
 		print 'Area under ROC is: ', self.auc, 'for subject', self.subject
 		self.acc = accuracy_score(self.ytest, np.array(self.predictions))
 		print 'Accuracy score is: ', self.acc, 'for subject', self.subject
+
+		return np.array(self.ytest), np.array(self.probabilities)
 		# self.prediction_accuracy = self.lrgs.score(self.X_test,self.y_test)
 		# print 'Prediction accuracy is ', self.prediction_accuracy
 
@@ -120,17 +131,23 @@ for modalities in modality_list:
 	single_results = dict()
 	single_results['modalities'] = modalities
 	auc = []; acc = []
+	y_true_all = []
+	y_pred_all = []
 	for idx in range(len(subjects)):
 		my_subject = subjects[idx]
 
 		deneme = strum_second_layer(my_subject, modalities.split(','))
 		deneme.fit()
-		deneme.score()
+		y_true, y_pred = deneme.score()
+		y_true_all.append(y_true)
+		y_pred_all.append(y_pred)
 		auc.append(deneme.auc)
 		acc.append(deneme.acc)
 
 	single_results['acc'] = acc
 	single_results['auc'] = auc
+	single_results['y_true_all'] = y_true_all
+	single_results['y_pred_all'] = y_pred_all
 	my_df = pd.DataFrame(single_results)
 	try:
 		all_results = pd.concat([all_results, my_df])
@@ -138,8 +155,8 @@ for modalities in modality_list:
 		all_results = my_df
 
 all_results.to_csv('all_results.csv')
-sns.set_style("whitegrid")
-sns.barplot(x="modalities", y="auc", data=all_results)
+# sns.set_style("whitegrid")
+# sns.barplot(x="modalities", y="auc", data=all_results)
 
 # import pickle
 # output = open('all_results.pkl', 'wb')
